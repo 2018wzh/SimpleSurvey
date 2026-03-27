@@ -1,4 +1,39 @@
-# 系统架构
-## 前端 Vue3
-## 后端 Golang Gin
-## 数据库 MongoDB
+# 问卷系统架构设计文档 (arch.md)
+
+## 1. 概述
+本项目旨在构建一个高可用、低耦合、模块化的在线问卷系统（类似 Google Forms）。系统需要支持动态表单构建、高并发数据收集以及多维度数据分析报表，满足生产级部署标准。
+
+## 2. 核心技术栈
+* **后端:** Golang + Gin 框架
+* **前端:** Vue 3 + Pinia + Vue Router + ECharts/Chart.js
+* **持久层:** MongoDB
+* **缓存与状态管理:** Redis
+
+## 3. 系统整体架构
+
+系统采用**分层与模块化单体 (Modular Monolith)** 结合的架构：
+
+1. **接入层:** Nginx / API Gateway 处理 HTTPS 卸载、跨域配置与基础限流。
+2. **应用层 (Golang):** 采用整洁架构 (Clean Architecture)，严格分离业务逻辑与底层实现。
+3. **缓存层 (Redis):** 存储高频访问的表单 Schema、JWT 黑名单以及用户状态。
+4. **持久层 (MongoDB):** 存储结构化的表单模板和非结构化的用户答卷。
+
+## 4. 后端模块化设计 (Clean Architecture)
+
+后端严格遵循 `Controller -> Service -> Repository` 三层架构，依赖倒置通过接口 (Interfaces) 实现。
+
+### 4.1 核心业务模块
+* **Identity Module:** 负责认证、授权、会话控制。采用 Refresh Token 机制实现安全的用户登录状态管理。
+* **Form Builder Module:** 负责问卷模板的 CRUD、版本控制与状态流转。
+* **Collector Module:** 面向 C 端填写者，负责高并发下的数据校验与落库。
+* **Analytics Module:** 负责利用 MongoDB 聚合管道生成统计报表。
+
+### 4.2 目录结构规范
+```text
+/cmd/server         # 程序入口
+/internal
+  /domain           # 核心领域实体与 Repository 接口定义
+  /repository       # 数据访问层实现 (MongoDB/Redis)
+  /service          # 核心业务逻辑实现
+  /delivery/http    # 表现层 (Gin 路由、Controllers、中间件)
+/pkg                # 公共工具包 (日志 Zap、配置读取、JWT等)
