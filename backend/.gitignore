@@ -1,0 +1,11 @@
+# Build artifacts
+server
+server.exe
+*.out
+
+# Env files
+.env
+
+# IDE / OS
+.vscode/
+.DS_Store
