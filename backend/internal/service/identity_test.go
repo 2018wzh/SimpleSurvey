@@ -79,6 +79,16 @@ func (f *fakeIdentityUserRepo) UpdateStatus(_ context.Context, userID string, st
 	return domain.ErrNotFound
 }
 
+func (f *fakeIdentityUserRepo) UpdatePassword(_ context.Context, userID string, password string) error {
+	for _, user := range f.byName {
+		if user.ID == userID {
+			user.Password = password
+			return nil
+		}
+	}
+	return domain.ErrNotFound
+}
+
 type fakeRefreshStore struct {
 	items map[string]time.Time
 }

@@ -253,3 +253,22 @@ func (r *UserRepository) UpdateStatus(ctx context.Context, userID string, status
 	}
 	return nil
 }
+
+func (r *UserRepository) UpdatePassword(ctx context.Context, userID string, password string) error {
+	ctx, cancel := context.WithTimeout(ctx, r.timeout)
+	defer cancel()
+
+	objectID, err := primitive.ObjectIDFromHex(userID)
+	if err != nil {
+		return domain.ErrNotFound
+	}
+
+	result, err := r.collection.UpdateOne(ctx, bson.M{"_id": objectID}, bson.M{"$set": bson.M{"password": password}})
+	if err != nil {
+		return err
+	}
+	if result.MatchedCount == 0 {
+		return domain.ErrNotFound
+	}
+	return nil
+}

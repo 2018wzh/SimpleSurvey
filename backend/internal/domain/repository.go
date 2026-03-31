@@ -12,6 +12,7 @@ type UserRepository interface {
 	List(ctx context.Context, filter UserListFilter) ([]User, int64, error)
 	UpdateRole(ctx context.Context, userID string, role UserRole) error
 	UpdateStatus(ctx context.Context, userID string, status UserStatus) error
+	UpdatePassword(ctx context.Context, userID string, password string) error
 }
 
 type QuestionnaireRepository interface {

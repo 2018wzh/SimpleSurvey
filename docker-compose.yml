@@ -1,0 +1,74 @@
+version: "3.8"
+
+services:
+  mongo:
+    image: mongo:8
+    restart: unless-stopped
+    environment:
+      # 默认创建的数据库名（可修改）
+      MONGO_INITDB_DATABASE: simple_survey
+      # 可选：启用 root 用户请取消注释并设置以下两项
+      # MONGO_INITDB_ROOT_USERNAME: root
+      # MONGO_INITDB_ROOT_PASSWORD: example
+    volumes:
+      - ./data/mongo:/data/db
+    ports:
+      - "27017:27017"
+    healthcheck:
+      test: ["CMD-SHELL", "mongosh --quiet --eval \"db.adminCommand({ ping: 1 })\" || mongo --eval \"db.adminCommand({ ping: 1 })\" || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+
+  redis:
+    image: redis:8-alpine
+    restart: unless-stopped
+    command: ["redis-server", "--appendonly", "yes"]
+    volumes:
+      - ./data/redis:/data
+    ports:
+      - "6379:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    depends_on:
+      - mongo
+      - redis
+    ports:
+      - "8080:8080"
+    environment:
+      - APP_ENV=development
+      - SERVER_PORT=8080
+      - MONGO_URI=mongodb://mongo:27017
+      - MONGO_DATABASE=simple_survey
+      - JWT_SECRET=change-me-in-production
+      - ACCESS_TOKEN_EXPIRES_HOURS=24
+      - REFRESH_TOKEN_EXPIRES_HOURS=168
+      - REDIS_ADDR=redis:6379
+      - REDIS_DB=0
+      - REDIS_PASSWORD=
+      - REDIS_KEY_PREFIX=simple_survey
+      - REQUEST_TIMEOUT_SECONDS=10
+      # 可选：在首次启动时创建或提升管理员（生产环境请通过安全方式设置）
+      - ADMIN_BOOTSTRAP_USERNAME=admin
+      - ADMIN_BOOTSTRAP_PASSWORD=admin123
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8080/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+
+# 使用相对路径将持久化数据保存在项目根目录的 ./data 下：
+# - Mongo 数据库文件位于 ./data/mongo
+# - Redis 持久化文件位于 ./data/redis

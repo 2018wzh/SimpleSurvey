@@ -214,3 +214,40 @@ func (s *IdentityService) BootstrapAdmin(ctx context.Context, username, password
 	}
 	return nil
 }
+
+// ResetAdminPassword resets the password for an existing admin user identified by username.
+func (s *IdentityService) ResetAdminPassword(ctx context.Context, username, newPassword string) *apperror.AppError {
+	username = strings.TrimSpace(username)
+	newPassword = strings.TrimSpace(newPassword)
+	if username == "" || newPassword == "" {
+		return apperror.BadRequest("用户名和密码不能为空")
+	}
+	if len(newPassword) < 8 || len(newPassword) > 128 {
+		return apperror.BadRequest("密码长度必须在8~128之间")
+	}
+
+	user, err := s.users.FindByUsername(ctx, username)
+	if err != nil {
+		if errors.Is(err, domain.ErrNotFound) {
+			return apperror.NotFound("用户不存在")
+		}
+		return apperror.Internal("查询用户失败")
+	}
+
+	if user.Role != domain.UserRoleAdmin {
+		return apperror.Forbidden("用户不是管理员")
+	}
+
+	hashed, hashErr := auth.HashPassword(newPassword)
+	if hashErr != nil {
+		return apperror.Internal("密码处理失败")
+	}
+
+	if err := s.users.UpdatePassword(ctx, user.ID, hashed); err != nil {
+		if errors.Is(err, domain.ErrNotFound) {
+			return apperror.NotFound("用户不存在")
+		}
+		return apperror.Internal("更新密码失败")
+	}
+	return nil
+}

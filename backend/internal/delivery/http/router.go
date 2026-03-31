@@ -25,7 +25,7 @@ func NewRouter(cfg config.Config, handler *Handler, log *zap.Logger) *gin.Engine
 		AllowCredentials: true,
 	}))
 
-	r.GET("/healthz", func(c *gin.Context) {
+	r.GET("/health", func(c *gin.Context) {
 		c.JSON(200, gin.H{"status": "ok"})
 	})
 
