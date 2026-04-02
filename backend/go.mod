@@ -1,6 +1,6 @@
 module github.com/2018wzh/SimpleSurvey/backend
 
-go 1.22.0
+go 1.25.0
 
 require (
 	github.com/gin-contrib/cors v1.7.2
@@ -12,6 +12,7 @@ require (
 	go.mongodb.org/mongo-driver v1.17.1
 	go.uber.org/zap v1.27.0
 	golang.org/x/crypto v0.31.0
+	golang.org/x/term v0.41.0
 )
 
 require (
@@ -48,7 +49,7 @@ require (
 	golang.org/x/arch v0.8.0 // indirect
 	golang.org/x/net v0.25.0 // indirect
 	golang.org/x/sync v0.10.0 // indirect
-	golang.org/x/sys v0.28.0 // indirect
+	golang.org/x/sys v0.42.0 // indirect
 	golang.org/x/text v0.21.0 // indirect
 	google.golang.org/protobuf v1.34.1 // indirect
 	gopkg.in/yaml.v3 v3.0.1 // indirect
