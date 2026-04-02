@@ -37,3 +37,14 @@
   /service          # 核心业务逻辑实现
   /delivery/http    # 表现层 (Gin 路由、Controllers、中间件)
 /pkg                # 公共工具包 (日志 Zap、配置读取、JWT等)
+```
+
+## 5. 当前仓库部署拓扑（实现对齐）
+
+当前仓库默认使用 `docker-compose.yml` 进行本地集成部署，拓扑如下：
+
+1. `frontend`（Nginx 托管 Vue 构建产物）对外暴露 `http://localhost:3000`
+2. `frontend` 将 `/api/*` 反向代理到 `backend:8080`
+3. `backend` 连接 `mongo` 与 `redis` 完成业务读写与会话/令牌存储
+
+该实现与“接入层 -> 应用层 -> 缓存层 -> 持久层”的分层设计保持一致。
