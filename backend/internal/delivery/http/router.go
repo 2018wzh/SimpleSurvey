@@ -41,8 +41,9 @@ func NewRouter(cfg config.Config, handler *Handler, log *zap.Logger) *gin.Engine
 		questionnaires := api.Group("/questionnaires")
 		questionnaires.Use(handler.AuthRequired(cfg.JWTSecret))
 		{
-			questionnaires.POST("", handler.CreateQuestionnaire)
+		questionnaires.POST("", handler.CreateQuestionnaire)
 			questionnaires.GET("", handler.GetQuestionnaires)
+			questionnaires.GET("/:id", handler.GetQuestionnaireDetail)
 			questionnaires.PATCH("/:id/status", handler.UpdateQuestionnaireStatus)
 			questionnaires.GET("/:id/stats", handler.GetQuestionnaireStats)
 			questionnaires.GET("/:id/responses", handler.GetQuestionnaireResponses)

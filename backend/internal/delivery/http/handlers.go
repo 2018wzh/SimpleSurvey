@@ -160,6 +160,17 @@ func (h *Handler) GetQuestionnaires(c *gin.Context) {
 	})
 }
 
+func (h *Handler) GetQuestionnaireDetail(c *gin.Context) {
+	userID := getRequiredUserID(c)
+	qid := c.Param("id")
+	questionnaire, appErr := h.questionnaire.GetDetail(c.Request.Context(), userID, qid)
+	if appErr != nil {
+		h.writeAppError(c, appErr)
+		return
+	}
+	response.Success(c, questionnaire)
+}
+
 func (h *Handler) UpdateQuestionnaireStatus(c *gin.Context) {
 	var req updateStatusRequest
 	if err := c.ShouldBindJSON(&req); err != nil {

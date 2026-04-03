@@ -82,6 +82,17 @@ func (s *QuestionnaireService) UpdateStatus(ctx context.Context, creatorID, ques
 	return nil
 }
 
+func (s *QuestionnaireService) GetDetail(ctx context.Context, creatorID, questionnaireID string) (*domain.Questionnaire, *apperror.AppError) {
+	questionnaire, err := s.questionnaires.FindByIDAndCreator(ctx, questionnaireID, creatorID)
+	if err != nil {
+		if errors.Is(err, domain.ErrNotFound) {
+			return nil, apperror.NotFound("问卷不存在")
+		}
+		return nil, apperror.Internal("查询问卷失败")
+	}
+	return questionnaire, nil
+}
+
 func (s *QuestionnaireService) GetStats(ctx context.Context, creatorID, questionnaireID string) (*domain.QuestionnaireStats, *apperror.AppError) {
 	questionnaire, err := s.questionnaires.FindByIDAndCreator(ctx, questionnaireID, creatorID)
 	if err != nil {
