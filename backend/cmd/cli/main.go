@@ -2,69 +2,91 @@ package main
 
 import (
 	"context"
-	"flag"
 	"fmt"
 	"os"
 	"strings"
 	"time"
 
+	"flag"
+
+	"github.com/2018wzh/SimpleSurvey/backend/internal/app"
 	"github.com/2018wzh/SimpleSurvey/backend/internal/config"
-	"github.com/2018wzh/SimpleSurvey/backend/internal/repository/mongo"
-	"github.com/2018wzh/SimpleSurvey/backend/internal/service"
+	"github.com/2018wzh/SimpleSurvey/backend/internal/migration"
 	mongoDriver "go.mongodb.org/mongo-driver/mongo"
 	"go.mongodb.org/mongo-driver/mongo/options"
-	"golang.org/x/term"
 )
 
 func main() {
-	username := flag.String("username", "admin", "管理员用户名")
-	password := flag.String("password", "", "新密码（若为空则交互式输入）")
-	flag.Parse()
+	if len(os.Args) < 2 {
+		printUsage()
+		os.Exit(1)
+	}
+
+	switch os.Args[1] {
+	case "run":
+		runCmd := flag.NewFlagSet("run", flag.ExitOnError)
+		_ = runCmd.Parse(os.Args[2:])
+		if err := app.RunServer(); err != nil {
+			fmt.Fprintln(os.Stderr, err)
+			os.Exit(1)
+		}
+	case "migrate":
+		migrateCmd := flag.NewFlagSet("migrate", flag.ExitOnError)
+		dryRun := migrateCmd.Bool("dry-run", false, "预演模式，不落库")
+		timeout := migrateCmd.Duration("timeout", 30*time.Minute, "迁移超时时间")
+		from := migrateCmd.String("from", "1.0", "迁移源版本，当前仅支持1.0")
+		_ = migrateCmd.Parse(os.Args[2:])
+
+		if err := migrateQuestionVersionID(*from, *dryRun, *timeout); err != nil {
+			fmt.Fprintln(os.Stderr, err)
+			os.Exit(1)
+		}
+	default:
+		fmt.Fprintf(os.Stderr, "不支持的子命令: %s\n", os.Args[1])
+		printUsage()
+		os.Exit(1)
+	}
+}
+
+func printUsage() {
+	fmt.Println("用法:")
+	fmt.Println("  go run ./cmd/cli run")
+	fmt.Println("  go run ./cmd/cli migrate [--from=1.0] [--dry-run] [--timeout=30m]")
+}
+
+func migrateQuestionVersionID(from string, dryRun bool, timeout time.Duration) error {
+	if strings.TrimSpace(from) != "1.0" {
+		return fmt.Errorf("当前仅支持从1.0迁移")
+	}
 
 	cfg := config.Load()
 
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), timeout)
 	defer cancel()
 	client, err := mongoDriver.Connect(ctx, options.Client().ApplyURI(cfg.MongoURI))
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "connect mongodb failed: %v\n", err)
-		os.Exit(1)
+		return fmt.Errorf("connect mongodb failed: %w", err)
 	}
 	defer func() {
 		_ = client.Disconnect(context.Background())
 	}()
 
 	db := client.Database(cfg.MongoDatabase)
-	userRepo := mongo.NewUserRepository(db, time.Duration(cfg.RequestTimeoutSec)*time.Second)
+	migrator := migration.NewQuestionVersionMigrator(db, time.Duration(cfg.RequestTimeoutSec)*time.Second)
 
-	svc := service.NewIdentityService(userRepo, nil, cfg.JWTSecret, time.Duration(cfg.AccessTokenExpiresHours)*time.Hour, time.Duration(cfg.RefreshTokenExpiresHours)*time.Hour)
-
-	newPass := strings.TrimSpace(*password)
-	if newPass == "" {
-		fmt.Print("输入新密码: ")
-		b, err := term.ReadPassword(int(os.Stdin.Fd()))
-		fmt.Println()
-		if err != nil {
-			fmt.Fprintf(os.Stderr, "读取密码失败: %v\n", err)
-			os.Exit(1)
-		}
-		fmt.Print("重复新密码: ")
-		b2, err := term.ReadPassword(int(os.Stdin.Fd()))
-		fmt.Println()
-		if err != nil {
-			fmt.Fprintf(os.Stderr, "读取密码失败: %v\n", err)
-			os.Exit(1)
-		}
-		if string(b) != string(b2) {
-			fmt.Fprintln(os.Stderr, "两次输入的密码不一致")
-			os.Exit(1)
-		}
-		newPass = string(b)
+	result, err := migrator.Migrate(ctx, dryRun)
+	if err != nil {
+		return fmt.Errorf("迁移失败: %w", err)
 	}
 
-	if err := svc.ResetAdminPassword(context.Background(), *username, newPass); err != nil {
-		fmt.Fprintf(os.Stderr, "重置密码失败: %s\n", err.Message)
-		os.Exit(1)
+	mode := "执行模式"
+	if dryRun {
+		mode = "预演模式"
 	}
-	fmt.Println("管理员密码已重置成功")
+
+	fmt.Printf("v%s -> 新模型迁移完成（%s）\n", from, mode)
+	fmt.Printf("questionnaires scanned=%d updated=%d questions patched=%d\n", result.QuestionnairesScanned, result.QuestionnairesUpdated, result.QuestionsPatched)
+	fmt.Printf("responses scanned=%d updated=%d answers patched=%d\n", result.ResponsesScanned, result.ResponsesUpdated, result.AnswersPatched)
+	fmt.Printf("questions generated=%d versions generated=%d\n", result.QuestionsGenerated, result.VersionsGenerated)
+	return nil
 }

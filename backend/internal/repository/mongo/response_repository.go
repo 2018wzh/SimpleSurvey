@@ -43,6 +43,10 @@ func (r *ResponseRepository) EnsureIndexes(ctx context.Context) error {
 			Keys:    bson.D{{Key: "answers.questionId", Value: 1}},
 			Options: options.Index().SetName("idx_responses_answer_qid"),
 		},
+		{
+			Keys:    bson.D{{Key: "answers.questionVersionId", Value: 1}},
+			Options: options.Index().SetName("idx_responses_answer_qvid"),
+		},
 	}
 	_, err := r.collection.Indexes().CreateMany(ctx, models)
 	return err
@@ -111,8 +115,15 @@ func (r *ResponseRepository) ListByQuestionnaire(ctx context.Context, questionna
 	}
 
 	query := bson.M{"questionnaireId": qid}
-	if filter.QuestionID != "" {
-		query["answers"] = bson.M{"$elemMatch": bson.M{"questionId": filter.QuestionID}}
+	if filter.QuestionID != "" || filter.QuestionVersionID != "" {
+		elemMatch := bson.M{}
+		if filter.QuestionID != "" {
+			elemMatch["questionId"] = filter.QuestionID
+		}
+		if filter.QuestionVersionID != "" {
+			elemMatch["questionVersionId"] = filter.QuestionVersionID
+		}
+		query["answers"] = bson.M{"$elemMatch": elemMatch}
 	}
 
 	count, err := r.collection.CountDocuments(ctx, query)

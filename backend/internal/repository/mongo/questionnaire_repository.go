@@ -49,6 +49,10 @@ func (r *QuestionnaireRepository) EnsureIndexes(ctx context.Context) error {
 			Keys:    bson.D{{Key: "isDeleted", Value: 1}},
 			Options: options.Index().SetName("idx_questionnaires_is_deleted"),
 		},
+		{
+			Keys:    bson.D{{Key: "questions.questionVersionId", Value: 1}},
+			Options: options.Index().SetName("idx_questionnaires_question_version"),
+		},
 	}
 	_, err := r.collection.Indexes().CreateMany(ctx, models)
 	return err

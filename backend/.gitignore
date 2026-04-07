@@ -1,6 +1,7 @@
 # Build artifacts
+*.exe
 server
-server.exe
+cli
 *.out
 
 # Env files

@@ -37,6 +37,10 @@ func Conflict(message string) *AppError {
 	return New(http.StatusConflict, 409, message)
 }
 
+func PreconditionFailed(message string) *AppError {
+	return New(http.StatusPreconditionFailed, 412, message)
+}
+
 func Internal(message string) *AppError {
 	return New(http.StatusInternalServerError, 500, message)
 }

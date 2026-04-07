@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/2018wzh/SimpleSurvey/backend/internal/domain"
+	. "github.com/2018wzh/SimpleSurvey/backend/internal/service"
 	"github.com/2018wzh/SimpleSurvey/backend/pkg/auth"
 )
 

@@ -17,10 +17,12 @@ type Handler struct {
 	identity      *service.IdentityService
 	questionnaire *service.QuestionnaireService
 	admin         *service.AdminService
+	question      *service.QuestionService
+	questionBank  *service.QuestionBankService
 }
 
-func NewHandler(identity *service.IdentityService, questionnaire *service.QuestionnaireService, admin *service.AdminService) *Handler {
-	return &Handler{identity: identity, questionnaire: questionnaire, admin: admin}
+func NewHandler(identity *service.IdentityService, questionnaire *service.QuestionnaireService, admin *service.AdminService, question *service.QuestionService, questionBank *service.QuestionBankService) *Handler {
+	return &Handler{identity: identity, questionnaire: questionnaire, admin: admin, question: question, questionBank: questionBank}
 }
 
 type registerRequest struct {
@@ -208,11 +210,13 @@ func (h *Handler) GetQuestionnaireResponses(c *gin.Context) {
 	page := parseInt(c.Query("page"), 1)
 	limit := parseInt(c.Query("limit"), 20)
 	questionID := strings.TrimSpace(c.Query("questionId"))
+	questionVersionID := strings.TrimSpace(c.Query("questionVersionId"))
 
 	items, total, appErr := h.questionnaire.GetResponses(c.Request.Context(), userID, qid, domain.ResponseListFilter{
-		Page:       page,
-		Limit:      limit,
-		QuestionID: questionID,
+		Page:              page,
+		Limit:             limit,
+		QuestionID:        questionID,
+		QuestionVersionID: questionVersionID,
 	})
 	if appErr != nil {
 		h.writeAppError(c, appErr)

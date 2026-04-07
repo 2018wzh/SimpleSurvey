@@ -2,6 +2,30 @@
 
 > 目标：将现网系统从“问卷内嵌题目”架构平滑迁移到“题目独立 + 版本化 + 题库共享（仅题库）”的新体系，覆盖数据、后端、前端、部署、验证与回滚全链路。
 
+## 0. 仓库内置迁移命令（questionVersionId 回填）
+
+当前后端已提供可执行迁移命令，用于将旧数据中的 `questionnaires.questions[*].questionVersionId` 与 `responses.answers[*].questionVersionId` 回填到新版结构。
+
+- 预演（不落库）：`go run ./cmd/cli migrate --from=1.0 --dry-run`
+- 执行（落库）：`go run ./cmd/cli migrate --from=1.0`
+
+说明：
+
+1. 会从 v1.0 问卷内嵌题目生成 `questions` 与 `question_versions` 数据。
+2. 会将问卷与答卷中的旧 `questionId` 重新映射到新生成的题目主键，并写入 `questionVersionId`。
+3. 会为问卷题目引用补齐 `snapshot`（用于运行期严格校验）。
+4. 迁移过程幂等，可重复执行。
+
+## 0.1 服务启动时自动校验与迁移
+
+当前后端在启动初始化阶段会执行数据库字段校验：
+
+1. 若检测到 v1 特征数据（如缺失 `questionVersionId` 或 `snapshot`），会自动触发 v1 迁移。
+2. 迁移后会再次执行严格字段校验：
+   - `questionnaires.questions[*]` 必须包含 `questionId`、`questionVersionId`、`snapshot`
+   - `responses.answers[*]` 必须包含 `questionId`、`questionVersionId`
+3. 若校验失败，服务将拒绝启动并返回错误信息。
+
 ## 1. 适用范围与目标版本
 
 ### 1.1 适用范围

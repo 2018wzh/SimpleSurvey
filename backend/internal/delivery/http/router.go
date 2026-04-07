@@ -41,12 +41,37 @@ func NewRouter(cfg config.Config, handler *Handler, log *zap.Logger) *gin.Engine
 		questionnaires := api.Group("/questionnaires")
 		questionnaires.Use(handler.AuthRequired(cfg.JWTSecret))
 		{
-		questionnaires.POST("", handler.CreateQuestionnaire)
+			questionnaires.POST("", handler.CreateQuestionnaire)
 			questionnaires.GET("", handler.GetQuestionnaires)
 			questionnaires.GET("/:id", handler.GetQuestionnaireDetail)
 			questionnaires.PATCH("/:id/status", handler.UpdateQuestionnaireStatus)
 			questionnaires.GET("/:id/stats", handler.GetQuestionnaireStats)
 			questionnaires.GET("/:id/responses", handler.GetQuestionnaireResponses)
+			questionnaires.POST("/:id/reports/crosstab", handler.CreateCrossTabReport)
+		}
+
+		questions := api.Group("/questions")
+		questions.Use(handler.AuthRequired(cfg.JWTSecret))
+		{
+			questions.POST("", handler.CreateQuestion)
+			questions.POST("/:id/versions", handler.CreateQuestionVersion)
+			questions.GET("/:id/versions", handler.GetQuestionVersions)
+			questions.POST("/:id/restore", handler.RestoreQuestionVersion)
+			questions.GET("/:id/usages", handler.GetQuestionUsages)
+			questions.GET("/:id/stats", handler.GetQuestionStats)
+		}
+
+		questionBanks := api.Group("/question-banks")
+		questionBanks.Use(handler.AuthRequired(cfg.JWTSecret))
+		{
+			questionBanks.POST("", handler.CreateQuestionBank)
+			questionBanks.GET("", handler.GetQuestionBanks)
+			questionBanks.PATCH("/:id", handler.UpdateQuestionBank)
+			questionBanks.POST("/:id/items", handler.AddQuestionBankItem)
+			questionBanks.PATCH("/:id/items/:questionId", handler.UpdateQuestionBankItem)
+			questionBanks.DELETE("/:id/items/:questionId", handler.RemoveQuestionBankItem)
+			questionBanks.POST("/:id/shares", handler.ShareQuestionBank)
+			questionBanks.DELETE("/:id/shares/:targetUserId", handler.UnshareQuestionBank)
 		}
 
 		admin := api.Group("/admin")

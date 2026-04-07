@@ -125,11 +125,13 @@ func (s *QuestionnaireService) GetResponses(ctx context.Context, creatorID, ques
 		return nil, 0, apperror.Internal("查询答卷失败")
 	}
 
-	if filter.QuestionID != "" {
+	if filter.QuestionID != "" || filter.QuestionVersionID != "" {
 		for i := range items {
 			filtered := make([]domain.Answer, 0, 1)
 			for _, ans := range items[i].Answers {
-				if ans.QuestionID == filter.QuestionID {
+				matchesQuestionID := filter.QuestionID == "" || ans.QuestionID == filter.QuestionID
+				matchesQuestionVersionID := filter.QuestionVersionID == "" || ans.QuestionVersionID == filter.QuestionVersionID
+				if matchesQuestionID && matchesQuestionVersionID {
 					filtered = append(filtered, ans)
 				}
 			}
@@ -231,7 +233,7 @@ func (s *QuestionnaireService) loadAllResponses(ctx context.Context, questionnai
 func (s *QuestionnaireService) aggregateStats(questionnaire domain.Questionnaire, responses []domain.SurveyResponse) *domain.QuestionnaireStats {
 	questionMap := make(map[string]domain.Question, len(questionnaire.Questions))
 	for _, q := range questionnaire.Questions {
-		questionMap[q.QuestionID] = q
+		questionMap[questionRefKey(q.QuestionID, q.QuestionVersionID)] = q
 	}
 
 	numberSums := map[string]float64{}
@@ -239,24 +241,29 @@ func (s *QuestionnaireService) aggregateStats(questionnaire domain.Questionnaire
 	questionStatsMap := map[string]*domain.QuestionStat{}
 
 	for _, q := range questionnaire.Questions {
-		questionStatsMap[q.QuestionID] = &domain.QuestionStat{
-			QuestionID:    q.QuestionID,
-			Type:          q.Type,
-			OptionCounts:  map[string]int{},
-			TextAnswers:   []string{},
-			TotalAnswered: 0,
+		key := questionRefKey(q.QuestionID, q.QuestionVersionID)
+		schema := questionSchemaFromQuestion(q)
+		questionStatsMap[key] = &domain.QuestionStat{
+			QuestionID:        q.QuestionID,
+			QuestionVersionID: q.QuestionVersionID,
+			Type:              schema.Type,
+			OptionCounts:      map[string]int{},
+			TextAnswers:       []string{},
+			TotalAnswered:     0,
 		}
 	}
 
 	for _, resp := range responses {
 		for _, ans := range resp.Answers {
-			q, ok := questionMap[ans.QuestionID]
+			key := questionRefKey(ans.QuestionID, ans.QuestionVersionID)
+			q, ok := questionMap[key]
 			if !ok {
 				continue
 			}
-			stat := questionStatsMap[q.QuestionID]
+			schema := questionSchemaFromQuestion(q)
+			stat := questionStatsMap[key]
 			stat.TotalAnswered++
-			switch q.Type {
+			switch schema.Type {
 			case domain.QuestionTypeSingleChoice:
 				if opt, ok := ans.Value.(string); ok {
 					stat.OptionCounts[opt]++
@@ -273,8 +280,8 @@ func (s *QuestionnaireService) aggregateStats(questionnaire domain.Questionnaire
 				}
 			case domain.QuestionTypeNumber:
 				if number, ok := toFloat64(ans.Value); ok {
-					numberSums[q.QuestionID] += number
-					numberCounts[q.QuestionID]++
+					numberSums[key] += number
+					numberCounts[key]++
 				}
 			}
 		}
@@ -282,22 +289,26 @@ func (s *QuestionnaireService) aggregateStats(questionnaire domain.Questionnaire
 
 	questionStats := make([]domain.QuestionStat, 0, len(questionnaire.Questions))
 	for _, q := range questionnaire.Questions {
-		stat := questionStatsMap[q.QuestionID]
-		if q.Type != domain.QuestionTypeSingleChoice && q.Type != domain.QuestionTypeMultipleChoice {
+		key := questionRefKey(q.QuestionID, q.QuestionVersionID)
+		schema := questionSchemaFromQuestion(q)
+		stat := questionStatsMap[key]
+		if schema.Type != domain.QuestionTypeSingleChoice && schema.Type != domain.QuestionTypeMultipleChoice {
 			stat.OptionCounts = nil
 		}
-		if q.Type != domain.QuestionTypeText {
+		if schema.Type != domain.QuestionTypeText {
 			stat.TextAnswers = nil
 		}
-		if q.Type == domain.QuestionTypeNumber && numberCounts[q.QuestionID] > 0 {
-			avg := numberSums[q.QuestionID] / float64(numberCounts[q.QuestionID])
+		if schema.Type == domain.QuestionTypeNumber && numberCounts[key] > 0 {
+			avg := numberSums[key] / float64(numberCounts[key])
 			stat.AverageValue = &avg
 		}
 		questionStats = append(questionStats, *stat)
 	}
 
 	sort.SliceStable(questionStats, func(i, j int) bool {
-		return questionStats[i].QuestionID < questionStats[j].QuestionID
+		left := questionStats[i].QuestionID + "::" + questionStats[i].QuestionVersionID
+		right := questionStats[j].QuestionID + "::" + questionStats[j].QuestionVersionID
+		return left < right
 	})
 
 	return &domain.QuestionnaireStats{

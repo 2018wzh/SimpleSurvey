@@ -19,4 +19,5 @@
 - 部署文档：`docs/deploy.md`
 - 数据模型：`docs/model.md`
 - 项目报告：`docs/report.md`
-- 测试报告：`docs/test.md`
+- 测试报告：`docs/test/test.md`
+- 迁移指南：`docs/migration.md`

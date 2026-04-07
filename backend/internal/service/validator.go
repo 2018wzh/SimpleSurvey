@@ -25,21 +25,34 @@ func validateQuestionnaireInput(input CreateQuestionnaireInput) *apperror.AppErr
 			details[field+".questionId"] = "questionId不能为空"
 			continue
 		}
+		if strings.TrimSpace(q.QuestionVersionID) == "" {
+			details[field+".questionVersionId"] = "questionVersionId不能为空"
+		}
+		if q.Order < 0 {
+			details[field+".order"] = "order不能为负数"
+		}
 		if _, exists := questionMap[q.QuestionID]; exists {
 			details[field+".questionId"] = "questionId必须唯一"
 			continue
 		}
-		if strings.TrimSpace(q.Title) == "" {
+		if q.Snapshot == nil {
+			details[field+".snapshot"] = "snapshot不能为空"
+			questionMap[q.QuestionID] = q
+			continue
+		}
+
+		schema := questionSchemaFromQuestion(q)
+		if strings.TrimSpace(schema.Title) == "" {
 			details[field+".title"] = "题目标题不能为空"
 		}
 
-		switch q.Type {
+		switch schema.Type {
 		case domain.QuestionTypeSingleChoice, domain.QuestionTypeMultipleChoice:
-			if len(q.Options) < 2 {
+			if len(schema.Options) < 2 {
 				details[field+".options"] = "选择题至少需要2个选项"
 			}
 			optionIDs := map[string]struct{}{}
-			for j, opt := range q.Options {
+			for j, opt := range schema.Options {
 				if strings.TrimSpace(opt.OptionID) == "" {
 					details[fmt.Sprintf("%s.options[%d].optionId", field, j)] = "optionId不能为空"
 				}
@@ -51,20 +64,20 @@ func validateQuestionnaireInput(input CreateQuestionnaireInput) *apperror.AppErr
 				}
 				optionIDs[opt.OptionID] = struct{}{}
 			}
-			if q.Type == domain.QuestionTypeMultipleChoice {
-				if q.Validation.MinSelect != nil && q.Validation.MaxSelect != nil && *q.Validation.MinSelect > *q.Validation.MaxSelect {
+			if schema.Type == domain.QuestionTypeMultipleChoice {
+				if schema.Validation.MinSelect != nil && schema.Validation.MaxSelect != nil && *schema.Validation.MinSelect > *schema.Validation.MaxSelect {
 					details[field+".validation"] = "minSelect不能大于maxSelect"
 				}
 			}
 		case domain.QuestionTypeText:
-			if q.Validation.MinLength != nil && q.Validation.MaxLength != nil && *q.Validation.MinLength > *q.Validation.MaxLength {
+			if schema.Validation.MinLength != nil && schema.Validation.MaxLength != nil && *schema.Validation.MinLength > *schema.Validation.MaxLength {
 				details[field+".validation"] = "minLength不能大于maxLength"
 			}
 		case domain.QuestionTypeNumber:
-			if q.Validation.MinVal != nil && q.Validation.MaxVal != nil && *q.Validation.MinVal > *q.Validation.MaxVal {
+			if schema.Validation.MinVal != nil && schema.Validation.MaxVal != nil && *schema.Validation.MinVal > *schema.Validation.MaxVal {
 				details[field+".validation"] = "minVal不能大于maxVal"
 			}
-			if q.Validation.NumberType != "" && q.Validation.NumberType != "integer" && q.Validation.NumberType != "float" {
+			if schema.Validation.NumberType != "" && schema.Validation.NumberType != "integer" && schema.Validation.NumberType != "float" {
 				details[field+".validation.numberType"] = "numberType仅支持integer或float"
 			}
 		default:
@@ -81,6 +94,11 @@ func validateQuestionnaireInput(input CreateQuestionnaireInput) *apperror.AppErr
 			details[field+".conditionQuestionId"] = "引用了不存在的问题"
 			continue
 		}
+		if q.Snapshot == nil {
+			details[field+".conditionQuestionId"] = "引用题目缺少snapshot"
+			continue
+		}
+		schema := questionSchemaFromQuestion(q)
 		targetRaw, ok := rule.ActionDetails["targetQuestionId"]
 		if !ok {
 			details[field+".actionDetails"] = "必须包含targetQuestionId"
@@ -95,7 +113,7 @@ func validateQuestionnaireInput(input CreateQuestionnaireInput) *apperror.AppErr
 		if rule.Action != domain.LogicActionJumpTo {
 			details[field+".action"] = "当前仅支持JUMP_TO"
 		}
-		switch q.Type {
+		switch schema.Type {
 		case domain.QuestionTypeSingleChoice:
 			if rule.Operator != domain.LogicOperatorEquals {
 				details[field+".operator"] = "单选题仅支持EQUALS"
@@ -125,29 +143,40 @@ func validateAnswers(questionnaire domain.Questionnaire, answers []domain.Answer
 	}
 
 	questionMap := make(map[string]domain.Question, len(questionnaire.Questions))
+	questionIDExists := make(map[string]struct{}, len(questionnaire.Questions))
 	for _, q := range questionnaire.Questions {
-		questionMap[q.QuestionID] = q
+		questionMap[questionRefKey(q.QuestionID, q.QuestionVersionID)] = q
+		questionIDExists[q.QuestionID] = struct{}{}
 	}
 
 	answerMap := map[string]domain.Answer{}
 	for _, answer := range answers {
-		if _, exists := answerMap[answer.QuestionID]; exists {
-			return apperror.BadRequest(fmt.Sprintf("题目%s重复作答", answer.QuestionID))
+		if strings.TrimSpace(answer.QuestionVersionID) == "" {
+			return apperror.BadRequest(fmt.Sprintf("题目%s缺少questionVersionId", answer.QuestionID))
 		}
-		q, ok := questionMap[answer.QuestionID]
+
+		refKey := questionRefKey(answer.QuestionID, answer.QuestionVersionID)
+		if _, exists := answerMap[refKey]; exists {
+			return apperror.BadRequest(fmt.Sprintf("题目%s版本%s重复作答", answer.QuestionID, answer.QuestionVersionID))
+		}
+		q, ok := questionMap[refKey]
 		if !ok {
-			return apperror.BadRequest(fmt.Sprintf("题目%s不存在", answer.QuestionID))
+			if _, exists := questionIDExists[answer.QuestionID]; exists {
+				return apperror.PreconditionFailed(fmt.Sprintf("题目%s版本不匹配", answer.QuestionID))
+			}
+			return apperror.BadRequest(fmt.Sprintf("题目%s版本%s不存在", answer.QuestionID, answer.QuestionVersionID))
 		}
 		if err := validateSingleAnswer(q, answer.Value); err != nil {
 			return err
 		}
-		answerMap[answer.QuestionID] = answer
+		answerMap[refKey] = answer
 	}
 
 	for _, q := range questionnaire.Questions {
-		if q.IsRequired {
-			if _, ok := answerMap[q.QuestionID]; !ok {
-				return apperror.BadRequest(fmt.Sprintf("题目%s为必答题", q.QuestionID))
+		if questionIsRequired(q) {
+			refKey := questionRefKey(q.QuestionID, q.QuestionVersionID)
+			if _, ok := answerMap[refKey]; !ok {
+				return apperror.BadRequest(fmt.Sprintf("题目%s版本%s为必答题", q.QuestionID, q.QuestionVersionID))
 			}
 		}
 	}
@@ -156,14 +185,18 @@ func validateAnswers(questionnaire domain.Questionnaire, answers []domain.Answer
 }
 
 func validateSingleAnswer(q domain.Question, value interface{}) *apperror.AppError {
-	switch q.Type {
+	if q.Snapshot == nil {
+		return apperror.BadRequest(fmt.Sprintf("题目%s缺少snapshot", q.QuestionID))
+	}
+	schema := questionSchemaFromQuestion(q)
+	switch schema.Type {
 	case domain.QuestionTypeSingleChoice:
 		answer, ok := value.(string)
 		if !ok || strings.TrimSpace(answer) == "" {
 			return apperror.BadRequest(fmt.Sprintf("题目%s必须选择一个选项", q.QuestionID))
 		}
 		allowed := map[string]struct{}{}
-		for _, opt := range q.Options {
+		for _, opt := range schema.Options {
 			allowed[opt.OptionID] = struct{}{}
 		}
 		if _, ok := allowed[answer]; !ok {
@@ -175,7 +208,7 @@ func validateSingleAnswer(q domain.Question, value interface{}) *apperror.AppErr
 			return apperror.BadRequest(fmt.Sprintf("题目%s必须为选项数组", q.QuestionID))
 		}
 		allowed := map[string]struct{}{}
-		for _, opt := range q.Options {
+		for _, opt := range schema.Options {
 			allowed[opt.OptionID] = struct{}{}
 		}
 		for _, item := range selections {
@@ -183,11 +216,11 @@ func validateSingleAnswer(q domain.Question, value interface{}) *apperror.AppErr
 				return apperror.BadRequest(fmt.Sprintf("题目%s选项非法", q.QuestionID))
 			}
 		}
-		if q.Validation.MinSelect != nil && len(selections) < *q.Validation.MinSelect {
-			return apperror.BadRequest(fmt.Sprintf("题目%s至少选择%d项", q.QuestionID, *q.Validation.MinSelect))
+		if schema.Validation.MinSelect != nil && len(selections) < *schema.Validation.MinSelect {
+			return apperror.BadRequest(fmt.Sprintf("题目%s至少选择%d项", q.QuestionID, *schema.Validation.MinSelect))
 		}
-		if q.Validation.MaxSelect != nil && len(selections) > *q.Validation.MaxSelect {
-			return apperror.BadRequest(fmt.Sprintf("题目%s最多选择%d项", q.QuestionID, *q.Validation.MaxSelect))
+		if schema.Validation.MaxSelect != nil && len(selections) > *schema.Validation.MaxSelect {
+			return apperror.BadRequest(fmt.Sprintf("题目%s最多选择%d项", q.QuestionID, *schema.Validation.MaxSelect))
 		}
 	case domain.QuestionTypeText:
 		text, ok := value.(string)
@@ -195,30 +228,41 @@ func validateSingleAnswer(q domain.Question, value interface{}) *apperror.AppErr
 			return apperror.BadRequest(fmt.Sprintf("题目%s必须为文本", q.QuestionID))
 		}
 		length := len([]rune(text))
-		if q.Validation.MinLength != nil && length < *q.Validation.MinLength {
-			return apperror.BadRequest(fmt.Sprintf("题目%s最少输入%d字", q.QuestionID, *q.Validation.MinLength))
+		if schema.Validation.MinLength != nil && length < *schema.Validation.MinLength {
+			return apperror.BadRequest(fmt.Sprintf("题目%s最少输入%d字", q.QuestionID, *schema.Validation.MinLength))
 		}
-		if q.Validation.MaxLength != nil && length > *q.Validation.MaxLength {
-			return apperror.BadRequest(fmt.Sprintf("题目%s最多输入%d字", q.QuestionID, *q.Validation.MaxLength))
+		if schema.Validation.MaxLength != nil && length > *schema.Validation.MaxLength {
+			return apperror.BadRequest(fmt.Sprintf("题目%s最多输入%d字", q.QuestionID, *schema.Validation.MaxLength))
 		}
 	case domain.QuestionTypeNumber:
 		number, ok := toFloat64(value)
 		if !ok {
 			return apperror.BadRequest(fmt.Sprintf("题目%s必须为数字", q.QuestionID))
 		}
-		if q.Validation.NumberType == "integer" && math.Mod(number, 1) != 0 {
+		if schema.Validation.NumberType == "integer" && math.Mod(number, 1) != 0 {
 			return apperror.BadRequest(fmt.Sprintf("题目%s必须为整数", q.QuestionID))
 		}
-		if q.Validation.MinVal != nil && number < *q.Validation.MinVal {
-			return apperror.BadRequest(fmt.Sprintf("题目%s不能小于%v", q.QuestionID, *q.Validation.MinVal))
+		if schema.Validation.MinVal != nil && number < *schema.Validation.MinVal {
+			return apperror.BadRequest(fmt.Sprintf("题目%s不能小于%v", q.QuestionID, *schema.Validation.MinVal))
 		}
-		if q.Validation.MaxVal != nil && number > *q.Validation.MaxVal {
-			return apperror.BadRequest(fmt.Sprintf("题目%s不能大于%v", q.QuestionID, *q.Validation.MaxVal))
+		if schema.Validation.MaxVal != nil && number > *schema.Validation.MaxVal {
+			return apperror.BadRequest(fmt.Sprintf("题目%s不能大于%v", q.QuestionID, *schema.Validation.MaxVal))
 		}
 	default:
-		return apperror.BadRequest(fmt.Sprintf("不支持的题型: %s", q.Type))
+		return apperror.BadRequest(fmt.Sprintf("不支持的题型: %s", schema.Type))
 	}
 	return nil
+}
+
+func questionSchemaFromQuestion(q domain.Question) domain.QuestionSchema {
+	if q.Snapshot == nil {
+		return domain.QuestionSchema{}
+	}
+	return *q.Snapshot
+}
+
+func questionIsRequired(q domain.Question) bool {
+	return q.Snapshot != nil && q.Snapshot.IsRequired
 }
 
 func toStringSlice(v interface{}) ([]string, bool) {
@@ -255,4 +299,8 @@ func toFloat64(v interface{}) (float64, bool) {
 	default:
 		return 0, false
 	}
+}
+
+func questionRefKey(questionID, questionVersionID string) string {
+	return strings.TrimSpace(questionID) + "::" + strings.TrimSpace(questionVersionID)
 }

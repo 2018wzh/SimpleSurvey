@@ -1,5 +1,18 @@
 ## 在线问卷系统测试报告
 
+### 自动化测试结构（2026-04-07 更新）
+
+后端自动化测试已统一迁移到 `backend/test` 下按模块分组：
+
+- `backend/test/service`
+- `backend/test/migration`
+- `backend/test/repository/mongo`
+- `backend/test/delivery/http`
+
+执行方式：在 `backend/` 目录运行 `go test ./...`。
+
+说明：`internal/**` 下已不再放置测试文件，相关白盒测试通过测试桥接导出保持可测性。
+
 下面我将对照**初始用户需求**，详细展示**测试过程**
 
 报告中引用的所有图片均为测试过程中的**真实截图**
