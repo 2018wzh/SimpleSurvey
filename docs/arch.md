@@ -25,8 +25,11 @@
 ### 4.1 核心业务模块
 * **Identity Module:** 负责认证、授权、会话控制。采用 Refresh Token 机制实现安全的用户登录状态管理。
 * **Form Builder Module:** 负责问卷模板的 CRUD、版本控制与状态流转。
-* **Collector Module:** 面向 C 端填写者，负责高并发下的数据校验与落库。
-* **Analytics Module:** 负责利用 MongoDB 聚合管道生成统计报表。
+* **Collector Module:** 面向 C 端填写者，负责高并发下的数据校验与落库。应对高并发写入时，可引入消息队列（如 Redis Stream/Kafka）实现异步削峰。
+* **Analytics Module (统计与报表聚合):** 负责多维度的问卷统计、报表生成及交叉分析。
+  * **实时聚合**: 针对中小型问卷，通过 **MongoDB Aggregation Pipeline** 直接执行聚合（`$match`, `$group`, `$unwind`）。
+  * **缓存加速**: 对大流量问卷看板，将聚合结果写入 **Redis 缓存**，设置合理的 TTL 或通过定时任务后台刷新，防止数据库扫表过载。
+  * **离线与预计算**: 支持大数据量下复杂交叉分析（Cross-Tabulation）结果的持久化存储，将报表数据落地在专属快照集合（如 `reports_snapshot`）中供快速拉取。
 
 ### 4.2 目录结构规范
 ```text

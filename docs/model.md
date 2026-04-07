@@ -1,130 +1,205 @@
 # 数据模型
+
 ## 用户模型
+
 ```json
 {
-  "_id": ObjectId("..."), // 系统自动生成的唯一ID
-  "username": "zhangsan", // 用户名
-  "password": "hashed_password_string", // 密码 (argon2 加密后的字符串)
-  "createdAt": ISODate("2026-03-26T10:00:00Z"), // 注册时间
-  "status": "active", // 账号状态
-  "meta_info": { // 可扩展字段，用于存储用户的后续偏好设置、自定义主题等非核心数据
+  "_id": ObjectId("..."),
+  "username": "zhangsan",
+  "password": "hashed_password_string",
+  "createdAt": ISODate("2026-03-26T10:00:00Z"),
+  "status": "active",
+  "meta_info": {
     "theme": "light",
     "language": "zh-CN"
   }
 }
 ```
-## 问卷模型
+
+## 题目主模型
+
 ```json
 {
   "_id": ObjectId("..."),
-  "creatorId": ObjectId("..."), // 关联ID：创建此问卷的用户ID
-  "title": "2026年产品满意度调查", // 标题
-  "description": "感谢您参与我们的问卷调查...", // 说明
-  "settings": {
-    "allowAnonymous": true, // 属性：是否允许匿名填写
-    "duplicateCheck": "cookie", // IP防重防刷机制 (cookie/ip/account) 等后续高阶属性
-    "themeColor": "#3C82F6" // 前端显示主题色扩展
-  },
-  
-  // --- 题目列表 ---
-  "questions": [
-    {
-      "questionId": "q_1", // 题目内部ID（UUID）
-      "type": "SINGLE_CHOICE", // 题型：单选（枚举可扩展为 SCALE评分、IMAGE图片等）
-      "title": "您最常使用的功能是？",
-      "isRequired": true, // 是否必答
-      "meta": { "displayMode": "radio_list" }, // 独立存储前端渲染方式、图片URL等自由格式扩展数据
-      "options": [
-        { "optionId": "opt_1", "text": "功能A", "hasOtherInput": false } // 若含"其它"，hasOtherInput将通知前端提供文本框
-      ]
-    },
-    {
-      "questionId": "q_2",
-      "type": "MULTIPLE_CHOICE", // 题型：多选
-      "title": "您希望增加哪些功能？",
-      "isRequired": false,
-      "options": [
-        { "optionId": "opt_3", "text": "功能C" },
-        { "optionId": "opt_4", "text": "功能D" }
-      ],
-      "validation": {
-        "minSelect": 1, // 限制选择数量：最少
-        "maxSelect": 3  // 限制选择数量：最多
-      }
-    },
-    {
-      "questionId": "q_3",
-      "type": "TEXT", // 题型：填空（文本）
-      "title": "您的宝贵建议",
-      "isRequired": false,
-      "validation": {
-        "minLength": 10, // 限制：最少字数
-        "maxLength": 500 // 限制：最多字数
-      }
-    },
-    {
-      "questionId": "q_4",
-      "type": "NUMBER", // 题型：填空（数字）
-      "title": "您的年龄段预测（请输入真实年龄）",
-      "isRequired": true,
-      "validation": {
-        "numberType": "integer", // 类型：整数/浮点数
-        "minVal": 18, // 范围：最小值
-        "maxVal": 100 // 范围：最大值
-      }
-    }
-  ],
-
-  // --- 题目跳转规则 ---
-  "logicRules": [
-    {
-      "conditionQuestionId": "q_1", // 触发规则的题目ID
-      "operator": "CONTAINS", // 比较操作符，如 EQUALS(单选等值), CONTAINS(多选包含), GREATER_THAN(数字大于), 以支持作业要求的“多选、数字条件跳转”
-      "conditionValue": "opt_2", // 触发条件的值（可以为单选ID、多选ID数组、数字定值等）
-      "action": "JUMP_TO", // 跳转到指定题目 (未来扩展 action: HIDDEN，SHOW 等等)
-      "actionDetails": {
-        "targetQuestionId": "q_3" // 跳转目标题目ID
-      }
-    }
-  ],
-  
+  "questionKey": "550e8400-e29b-41d4-a716-446655440000", // 业务稳定标识（UUID），可用于跨系统引用
+  "ownerId": ObjectId("..."), // 创建者
+  "currentVersion": 3, // 当前最新版本号
+  "currentVersionId": ObjectId("..."), // 当前版本文档ID
+  "tags": ["人口统计", "基础题"],
   "createdAt": ISODate("2026-03-26T10:00:00Z"),
-  "updatedAt": ISODate("2026-03-26T10:00:00Z"),
-  "isDeleted": false // 逻辑删除标识位，方便数据归档恢复
+  "updatedAt": ISODate("2026-04-07T09:00:00Z"),
+  "isArchived": false
 }
 ```
-## 答卷模型
+
+## 题目版本模型
+
 ```json
 {
   "_id": ObjectId("..."),
-  "questionnaireId": ObjectId("..."), // 关联的问卷ID
-  "isAnonymous": true, // 标识是否为匿名记录
-  "userId": ObjectId("..."), // 填写人的用户ID。如果是匿名填写，此字段为 null 且不存在
-  
-  // 用户的具体回答
-  "answers": [
-    {
-      "questionId": "q_1",
-      "value": "opt_2" // 单选存选项ID
+  "questionId": ObjectId("..."),
+  "version": 3,
+  "parentVersionId": ObjectId("...") , // 来源版本，可为空（v1）
+  "changeType": "edit", // create/edit/restore/fork
+  "schema": {
+    "type": "NUMBER",
+    "title": "你的年龄是？",
+    "isRequired": true,
+    "options": [],
+    "validation": {
+      "numberType": "integer",
+      "minVal": 1,
+      "maxVal": 120
     },
+    "meta": {
+      "displayMode": "input"
+    }
+  },
+  "createdBy": ObjectId("..."),
+  "createdAt": ISODate("2026-04-07T09:00:00Z"),
+  "note": "调整年龄范围上限"
+}
+```
+
+## 题库模型
+
+```json
+{
+  "_id": ObjectId("..."),
+  "name": "基础人口统计题库",
+  "ownerId": ObjectId("..."),
+  "description": "跨项目复用的基础题",
+  "visibility": "team",
+  "sharedWith": [
     {
-      "questionId": "q_2",
-      "value": ["opt_3", "opt_4"] // 多选存选项ID数组
-    },
-    {
-      "questionId": "q_3",
-      "value": "产品做得非常棒！" // 文本填空存字符串
-    },
-    {
-      "questionId": "q_4",
-      "value": 25 // 数字存数值类型
+      "userId": ObjectId("..."),
+      "permission": "use", // use/manage
+      "grantedBy": ObjectId("..."),
+      "grantedAt": ISODate("2026-04-07T09:10:00Z"),
+      "expiresAt": null
     }
   ],
-  
-  "submittedAt": ISODate("2026-03-26T10:15:00Z"), // 提交时间
+  "items": [
+    {
+      "questionId": ObjectId("..."),
+      "pinnedVersionId": null, // 可选：固定版本；为空表示默认取最新可用版本
+      "addedBy": ObjectId("..."),
+      "addedAt": ISODate("2026-04-07T09:21:00Z"),
+      "order": 1
+    }
+  ],
+  "createdAt": ISODate("2026-04-07T09:20:00Z"),
+  "updatedAt": ISODate("2026-04-07T09:20:00Z")
+}
+```
+
+## 问卷模型
+
+```json
+{
+  "_id": ObjectId("..."),
+  "creatorId": ObjectId("..."),
+  "title": "2026年产品满意度调查",
+  "description": "感谢您参与我们的问卷调查...",
+  "settings": {
+    "allowAnonymous": true,
+    "duplicateCheck": "cookie",
+    "themeColor": "#3C82F6"
+  },
+  "questions": [
+    {
+      "questionId": ObjectId("..."),
+      "questionVersionId": ObjectId("..."),
+      "order": 1,
+      "snapshot": {
+        "type": "NUMBER",
+        "title": "你的年龄是？"
+      }
+    }
+  ],
+  "logicRules": [
+    {
+      "conditionQuestionRefOrder": 1,
+      "operator": "GREATER_THAN",
+      "conditionValue": 18,
+      "action": "JUMP_TO",
+      "actionDetails": {
+        "targetQuestionRefOrder": 3
+      }
+    }
+  ],
+  "status": "draft", // draft/published/closed
+  "publishedAt": null,
+  "createdAt": ISODate("2026-03-26T10:00:00Z"),
+  "updatedAt": ISODate("2026-04-07T10:00:00Z"),
+  "isDeleted": false
+}
+```
+
+## 答卷模型
+
+```json
+{
+  "_id": ObjectId("..."),
+  "questionnaireId": ObjectId("..."),
+  "isAnonymous": true,
+  "userId": null,
+  "answers": [
+    {
+      "questionId": ObjectId("..."),
+      "questionVersionId": ObjectId("..."),
+      "value": 25
+    }
+  ],
+  "submittedAt": ISODate("2026-03-26T10:15:00Z"),
   "statistics": {
-    "completionTime": 300, // 完成问卷的时间（秒）
-    "ipAddress": "192.168.1.1", // 用于追踪匿名用户
+    "completionTime": 300,
+    "ipAddress": "192.168.1.1"
   }
 }
 ```
+
+## 报表与统计缓存模型 (Analytics Report Cache)
+
+```json
+{
+  "_id": ObjectId("..."),
+  "questionnaireId": ObjectId("..."),
+  "reportType": "CROSS_TABULATION", 
+  "parametersHash": "a1b2c3d4...", 
+  "calculatedAt": ISODate("2026-04-07T10:00:00Z"),
+  "expiresAt": ISODate("2026-04-07T11:00:00Z"),
+  "resultData": {
+    "dimensions": ["q1", "q2"],
+    "matrix": [
+      { "row": "A", "col": "X", "count": 45, "percentage": 0.3 },
+      { "row": "A", "col": "Y", "count": 105, "percentage": 0.7 }
+    ],
+    "totalSample": 150
+  }
+}
+```
+
+## 索引建议
+
+1. `questions`: `ownerId + updatedAt`、`questionKey`
+2. `question_versions`: `questionId + version`、`parentVersionId`
+3. `question_banks`: `ownerId + updatedAt`、`sharedWith.userId`、`items.questionId`
+4. `questionnaires`: `creatorId + status + updatedAt`
+5. `questionnaire_question_usages`: `questionId + questionVersionId`、`questionnaireId`
+6. `responses`: `questionnaireId + submittedAt`、`answers.questionId`、`answers.questionVersionId`
+7. `analytics_reports`: `questionnaireId + parametersHash`（查询）、`expiresAt`（TTL 删除）
+
+## 关键约束
+
+1. 发布问卷后，`questionRefs[*].questionVersionId` 不可被覆盖更新。
+2. 题目编辑必须创建新版本（`question_versions` 新增记录）。
+3. 支持从任意历史版本恢复（恢复行为本质上是创建新版本，`changeType=restore`）。
+4. 同一题目的多个版本可同时被不同问卷引用。
+5. 可查询题目被使用的问卷列表（基于 `questionnaire_question_usages` 或反查问卷引用）。
+6. 共享能力仅作用于题库（`question_banks.sharedWith`），不允许直接共享 `questions`。
+7. `questionKey` 必须使用 UUID（推荐 UUID v4）。
+
+## 文档关联
+
+- 迁移方案：见 `docs/migration.md`
