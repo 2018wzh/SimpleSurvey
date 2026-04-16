@@ -75,6 +75,7 @@
 import { ref, reactive, computed, onMounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import api from '../api'
+import { buildSurveyResponsePayload, getNextQuestionIndex, validateQuestionAnswer } from '../utils/surveyRuntime'
 
 const route = useRoute()
 const router = useRouter()
@@ -128,71 +129,16 @@ function validateCurrent() {
   const q = currentQ.value
   if (!q) return true
   const val = answers[q.questionId]
-  const v = q.validation || {}
-
-  if (q.isRequired) {
-    if (q.type === 'SINGLE_CHOICE' && !val) return '请选择一个选项'
-    if (q.type === 'MULTIPLE_CHOICE' && (!val || val.length === 0)) return '请至少选择一个选项'
-    if (q.type === 'TEXT' && (!val || !val.trim())) return '请填写内容'
-    if (q.type === 'NUMBER' && (val === null || val === '' || val === undefined)) return '请填写数字'
-  }
-
-  if (q.type === 'MULTIPLE_CHOICE' && val && val.length > 0) {
-    if (v.minSelect && val.length < v.minSelect) return `至少选择 ${v.minSelect} 个选项`
-    if (v.maxSelect && val.length > v.maxSelect) return `最多选择 ${v.maxSelect} 个选项`
-  }
-
-  if (q.type === 'TEXT' && val) {
-    if (v.minLength && val.length < v.minLength) return `最少输入 ${v.minLength} 个字`
-    if (v.maxLength && val.length > v.maxLength) return `最多输入 ${v.maxLength} 个字`
-  }
-
-  if (q.type === 'NUMBER' && val !== null && val !== '' && val !== undefined) {
-    const num = Number(val)
-    if (isNaN(num)) return '请输入有效数字'
-    if (v.numberType === 'integer' && !Number.isInteger(num)) return '必须为整数'
-    if (v.minVal != null && num < v.minVal) return `不能小于 ${v.minVal}`
-    if (v.maxVal != null && num > v.maxVal) return `不能大于 ${v.maxVal}`
-  }
-
-  return true
+  return validateQuestionAnswer(q, val)
 }
 
 function getNextIndex() {
-  const q = currentQ.value
-  if (!q) return null
-  const val = answers[q.questionId]
-  const rules = survey.value.logicRules || []
-
-  // Check logic rules
-  for (const rule of rules) {
-    if (rule.conditionQuestionId !== q.questionId) continue
-    if (rule.action !== 'JUMP_TO') continue
-    let matched = false
-    const rv = rule.conditionValue
-
-    if (rule.operator === 'EQUALS') {
-      if (q.type === 'SINGLE_CHOICE') matched = val === rv
-      else if (q.type === 'NUMBER') matched = Number(val) === Number(rv)
-      else matched = val === rv
-    } else if (rule.operator === 'CONTAINS') {
-      if (Array.isArray(val)) matched = val.includes(rv)
-      else if (typeof val === 'string') matched = val.includes(rv)
-    } else if (rule.operator === 'GREATER_THAN') {
-      if (q.type === 'NUMBER' && val !== null && val !== '') matched = Number(val) > Number(rv)
-    } else if (rule.operator === 'LESS_THAN') {
-      if (q.type === 'NUMBER' && val !== null && val !== '') matched = Number(val) < Number(rv)
-    }
-
-    if (matched && rule.actionDetails && rule.actionDetails.targetQuestionId) {
-      const targetIdx = questions.value.findIndex(qq => qq.questionId === rule.actionDetails.targetQuestionId)
-      if (targetIdx >= 0) return targetIdx
-    }
-  }
-
-  // Default: next sequential question
-  const next = currentQIndex.value + 1
-  return next < questions.value.length ? next : null
+  return getNextQuestionIndex({
+    currentIndex: currentQIndex.value,
+    questions: questions.value,
+    answers,
+    logicRules: survey.value.logicRules || []
+  })
 }
 
 function goNext() {
@@ -218,24 +164,14 @@ function goBack() {
 }
 
 async function doSubmit() {
-  // Build answers array only for visited questions + current
-  const visited = [...new Set([...visitedOrder.value, currentQIndex.value])]
-  const ansArr = []
-  for (const idx of visited) {
-    const q = questions.value[idx]
-    if (!q) continue
-    let val = answers[q.questionId]
-    if (q.type === 'NUMBER' && val !== null && val !== '' && val !== undefined) val = Number(val)
-    if (val === '' || val === null || val === undefined) continue
-    if (Array.isArray(val) && val.length === 0) continue
-    ansArr.push({ questionId: q.questionId, questionVersionId: q.questionVersionId, value: val })
-  }
-
-  const payload = {
+  const payload = buildSurveyResponsePayload({
+    questions: questions.value,
+    answers,
+    visitedOrder: visitedOrder.value,
+    currentIndex: currentQIndex.value,
     isAnonymous: isAnonymous.value,
-    answers: ansArr,
-    statistics: { completionTime: Math.round((Date.now() - startTime) / 1000) }
-  }
+    startTime
+  })
 
   try {
     await api.submitResponse(surveyId, payload)

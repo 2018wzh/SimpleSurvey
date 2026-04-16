@@ -163,6 +163,7 @@
 <script setup>
 import { ref, reactive, onMounted } from 'vue'
 import api from '../api'
+import { buildQuestionSchema } from '../utils/questionBank'
 
 const questions = ref([])
 const loading = ref(false)
@@ -217,35 +218,12 @@ function onNewQuestionTypeChange() {
 }
 
 function buildNewQuestionSchema() {
-  const schema = {
-    type: newQuestion.type,
-    title: newQuestion.title,
-    isRequired: newQuestion.isRequired,
-    meta: {}
+  try {
+    return buildQuestionSchema(newQuestion)
+  } catch (e) {
+    alert(e.message || '创建失败')
+    return null
   }
-  if (newQuestion.type === 'SINGLE_CHOICE' || newQuestion.type === 'MULTIPLE_CHOICE') {
-    schema.options = newQuestion.options.filter(o => o.text.trim()).map(o => ({ optionId: o.optionId, text: o.text }))
-    if (schema.options.length < 2) {
-      alert('选择题至少需要2个选项')
-      return null
-    }
-  }
-  const v = {}
-  if (newQuestion.type === 'MULTIPLE_CHOICE') {
-    if (newQuestion.validation.minSelect) v.minSelect = newQuestion.validation.minSelect
-    if (newQuestion.validation.maxSelect) v.maxSelect = newQuestion.validation.maxSelect
-  }
-  if (newQuestion.type === 'TEXT') {
-    if (newQuestion.validation.minLength) v.minLength = newQuestion.validation.minLength
-    if (newQuestion.validation.maxLength) v.maxLength = newQuestion.validation.maxLength
-  }
-  if (newQuestion.type === 'NUMBER') {
-    if (newQuestion.validation.minVal != null && newQuestion.validation.minVal !== '') v.minVal = newQuestion.validation.minVal
-    if (newQuestion.validation.maxVal != null && newQuestion.validation.maxVal !== '') v.maxVal = newQuestion.validation.maxVal
-    if (newQuestion.integerOnly) v.numberType = 'integer'
-  }
-  if (Object.keys(v).length) schema.validation = v
-  return schema
 }
 
 async function submitNewQuestion() {
@@ -323,31 +301,13 @@ function startNewVersion(id) {
 
 async function submitNewVersion(questionId) {
   const f = newVersionForm[questionId]
-  const schema = {
-    type: f.type,
-    title: f.title,
-    isRequired: f.isRequired,
-    meta: {}
+  let schema
+  try {
+    schema = buildQuestionSchema(f)
+  } catch (e) {
+    alert(e.message || '创建失败')
+    return
   }
-  if (f.type === 'SINGLE_CHOICE' || f.type === 'MULTIPLE_CHOICE') {
-    schema.options = f.options.filter(o => o.text.trim()).map(o => ({ optionId: o.optionId, text: o.text }))
-    if (schema.options.length < 2) { alert('至少需要2个选项'); return }
-  }
-  const v = {}
-  if (f.type === 'MULTIPLE_CHOICE') {
-    if (f.validation.minSelect) v.minSelect = f.validation.minSelect
-    if (f.validation.maxSelect) v.maxSelect = f.validation.maxSelect
-  }
-  if (f.type === 'TEXT') {
-    if (f.validation.minLength) v.minLength = f.validation.minLength
-    if (f.validation.maxLength) v.maxLength = f.validation.maxLength
-  }
-  if (f.type === 'NUMBER') {
-    if (f.validation.minVal != null && f.validation.minVal !== '') v.minVal = f.validation.minVal
-    if (f.validation.maxVal != null && f.validation.maxVal !== '') v.maxVal = f.validation.maxVal
-    if (f.validation.numberType) v.numberType = f.validation.numberType
-  }
-  if (Object.keys(v).length) schema.validation = v
 
   try {
     await api.createQuestionVersion(questionId, { schema, changeType: 'edit', note: f.note })

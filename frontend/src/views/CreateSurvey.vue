@@ -185,6 +185,7 @@
 import { ref, reactive } from 'vue'
 import { useRouter } from 'vue-router'
 import api from '../api'
+import { buildCreateQuestionnairePayload, makeQuestionSnapshot, snapshotsEqual, typeLabel } from '../utils/questionnaire'
 
 const router = useRouter()
 const error = ref('')
@@ -210,47 +211,6 @@ function nextQuestionId() {
   return 'lq' + (++tempCounter)
 }
 
-function buildValidation(q) {
-  const v = {}
-  if (q.type === 'MULTIPLE_CHOICE') {
-    if (q.validation.minSelect) v.minSelect = q.validation.minSelect
-    if (q.validation.maxSelect) v.maxSelect = q.validation.maxSelect
-  }
-  if (q.type === 'TEXT') {
-    if (q.validation.minLength) v.minLength = q.validation.minLength
-    if (q.validation.maxLength) v.maxLength = q.validation.maxLength
-  }
-  if (q.type === 'NUMBER') {
-    if (q.validation.minVal !== null && q.validation.minVal !== '') v.minVal = q.validation.minVal
-    if (q.validation.maxVal !== null && q.validation.maxVal !== '') v.maxVal = q.validation.maxVal
-    if (q.integerOnly) v.numberType = 'integer'
-  }
-  return v
-}
-
-function makeSnapshot(q) {
-  const snapshot = {
-    type: q.type,
-    title: q.title,
-    isRequired: q.isRequired,
-    meta: q.meta || {}
-  }
-  if (q.type === 'SINGLE_CHOICE' || q.type === 'MULTIPLE_CHOICE') {
-    snapshot.options = (q.options || []).filter(o => o.text.trim()).map(o => ({ optionId: o.optionId, text: o.text, hasOtherInput: false }))
-  }
-  const v = buildValidation(q)
-  if (Object.keys(v).length > 0) snapshot.validation = v
-  return snapshot
-}
-
-function snapshotsEqual(a, b) {
-  return JSON.stringify(a) === JSON.stringify(b)
-}
-
-function typeLabel(t) {
-  return { SINGLE_CHOICE: '单选题', MULTIPLE_CHOICE: '多选题', TEXT: '文本填空', NUMBER: '数字填空' }[t] || t
-}
-
 function createEmptyLocalQuestion() {
   const q = {
     tempId: nextTempId(),
@@ -269,7 +229,7 @@ function createEmptyLocalQuestion() {
     integerOnly: false,
     meta: {}
   }
-  q.originalSnapshot = makeSnapshot(q)
+  q.originalSnapshot = makeQuestionSnapshot(q)
   q.originalQuestionVersionId = ''
   return q
 }
@@ -362,7 +322,7 @@ async function addFromBank(item) {
       integerOnly: schema.validation?.numberType === 'integer',
       meta: schema.meta || {}
     }
-    q.originalSnapshot = makeSnapshot(q)
+    q.originalSnapshot = makeQuestionSnapshot(q)
     q.originalQuestionVersionId = version.id
     form.questions.push(q)
     bankDialog.value = false
@@ -413,7 +373,7 @@ async function addFromMyQuestion(qEntity) {
       integerOnly: schema.validation?.numberType === 'integer',
       meta: schema.meta || {}
     }
-    q.originalSnapshot = makeSnapshot(q)
+    q.originalSnapshot = makeQuestionSnapshot(q)
     q.originalQuestionVersionId = currentVersion.id
     form.questions.push(q)
     myQuestionDialog.value = false
@@ -437,7 +397,7 @@ async function submit() {
       if ((q.type === 'SINGLE_CHOICE' || q.type === 'MULTIPLE_CHOICE') && q.options.filter(o => o.text.trim()).length < 2) {
         error.value = `题目 ${i + 1} 至少需要2个选项`; return
       }
-      const snapshot = makeSnapshot(q)
+      const snapshot = makeQuestionSnapshot(q)
       const questionKey = crypto.randomUUID()
       try {
         const res = await api.createQuestion({ questionKey, schema: snapshot, tags: [] })
@@ -449,7 +409,7 @@ async function submit() {
         return
       }
     } else if ((q.source === 'bank' || q.source === 'existing') && q.originalSnapshot) {
-      const currentSnapshot = makeSnapshot(q)
+      const currentSnapshot = makeQuestionSnapshot(q)
       if (!snapshotsEqual(currentSnapshot, q.originalSnapshot)) {
         try {
           const res = await api.createQuestionVersion(q.questionId, {
@@ -467,35 +427,7 @@ async function submit() {
     }
   }
 
-  const payload = {
-    title: form.title,
-    description: form.description,
-    settings: { ...form.settings },
-    questions: form.questions.map((q, idx) => {
-      const snapshot = makeSnapshot(q)
-      return {
-        questionId: q.questionId,
-        questionVersionId: q.questionVersionId,
-        order: idx,
-        snapshot: snapshot,
-        type: q.type,
-        title: q.title,
-        isRequired: q.isRequired,
-        options: (q.type === 'SINGLE_CHOICE' || q.type === 'MULTIPLE_CHOICE') ? snapshot.options : undefined,
-        validation: snapshot.validation,
-        meta: q.meta || {}
-      }
-    }),
-    logicRules: form.logicRules
-      .filter(r => r.conditionQuestionId && r.targetQuestionId)
-      .map(r => ({
-        conditionQuestionId: r.conditionQuestionId,
-        operator: r.operator,
-        conditionValue: r.conditionValue,
-        action: 'JUMP_TO',
-        actionDetails: { targetQuestionId: r.targetQuestionId }
-      }))
-  }
+  const payload = buildCreateQuestionnairePayload(form)
 
   try {
     await api.createQuestionnaire(payload)

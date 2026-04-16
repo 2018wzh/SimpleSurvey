@@ -1,4 +1,5 @@
 import { createRouter, createWebHistory } from 'vue-router'
+import { resolveRouteRedirect } from '../utils/authRoute'
 
 const routes = [
   { path: '/login', name: 'Login', component: () => import('../views/Login.vue'), meta: { guest: true } },
@@ -18,13 +19,9 @@ const router = createRouter({
 
 router.beforeEach((to, from, next) => {
   const token = localStorage.getItem('token')
-  if (to.meta.auth && !token) {
-    next('/login')
-  } else if (to.meta.guest && token) {
-    next('/')
-  } else {
-    next()
-  }
+  const redirect = resolveRouteRedirect(to.meta, !!token)
+  if (redirect) next(redirect)
+  else next()
 })
 
 export default router
