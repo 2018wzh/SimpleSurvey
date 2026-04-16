@@ -104,6 +104,7 @@ func (r *QuestionRepository) Create(ctx context.Context, question *domain.Questi
 		version.CreatedAt = now
 	}
 	question.CurrentVersionID = version.ID
+	version.QuestionID = question.ID
 
 	qDoc, err := toQuestionDoc(*question)
 	if err != nil {
@@ -231,6 +232,50 @@ func (r *QuestionRepository) ListVersions(ctx context.Context, questionID string
 		return nil, err
 	}
 	return items, nil
+}
+
+func (r *QuestionRepository) ListByOwner(ctx context.Context, ownerID string, filter domain.QuestionListFilter) ([]domain.QuestionEntity, int64, error) {
+	ctx, cancel := context.WithTimeout(ctx, r.timeout)
+	defer cancel()
+
+	ooid, err := primitive.ObjectIDFromHex(ownerID)
+	if err != nil {
+		return []domain.QuestionEntity{}, 0, domain.ErrNotFound
+	}
+
+	query := bson.M{"ownerId": ooid}
+	if filter.Keyword != "" {
+		query["questionKey"] = bson.M{"$regex": filter.Keyword, "$options": "i"}
+	}
+
+	total, err := r.questions.CountDocuments(ctx, query)
+	if err != nil {
+		return nil, 0, err
+	}
+
+	opts := options.Find().
+		SetSort(bson.D{{Key: "updatedAt", Value: -1}}).
+		SetSkip(int64((filter.Page - 1) * filter.Limit)).
+		SetLimit(int64(filter.Limit))
+
+	cursor, err := r.questions.Find(ctx, query, opts)
+	if err != nil {
+		return nil, 0, err
+	}
+	defer cursor.Close(ctx)
+
+	items := make([]domain.QuestionEntity, 0)
+	for cursor.Next(ctx) {
+		var doc questionDoc
+		if err := cursor.Decode(&doc); err != nil {
+			return nil, 0, err
+		}
+		items = append(items, toDomainQuestion(doc))
+	}
+	if err := cursor.Err(); err != nil {
+		return nil, 0, err
+	}
+	return items, total, nil
 }
 
 func (r *QuestionRepository) CreateVersion(ctx context.Context, question *domain.QuestionEntity, version *domain.QuestionVersion) error {

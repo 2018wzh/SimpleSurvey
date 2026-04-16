@@ -71,6 +71,22 @@ type createCrossTabRequest struct {
 	} `json:"filters"`
 }
 
+func (h *Handler) GetMyQuestions(c *gin.Context) {
+	page := parseInt(c.Query("page"), 1)
+	limit := parseInt(c.Query("limit"), 20)
+	keyword := strings.TrimSpace(c.Query("keyword"))
+	items, total, appErr := h.question.ListMine(c.Request.Context(), getRequiredUserID(c), domain.QuestionListFilter{
+		Page:    page,
+		Limit:   limit,
+		Keyword: keyword,
+	})
+	if appErr != nil {
+		h.writeAppError(c, appErr)
+		return
+	}
+	response.Success(c, gin.H{"items": items, "total": total, "page": page, "limit": limit})
+}
+
 func (h *Handler) CreateQuestion(c *gin.Context) {
 	var req createQuestionRequest
 	if err := c.ShouldBindJSON(&req); err != nil {

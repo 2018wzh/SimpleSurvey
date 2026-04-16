@@ -164,6 +164,12 @@ type QuestionBank struct {
 	UpdatedAt   time.Time              `json:"updatedAt" bson:"updatedAt"`
 }
 
+type QuestionListFilter struct {
+	Page    int
+	Limit   int
+	Keyword string
+}
+
 type QuestionBankListFilter struct {
 	Page    int
 	Limit   int

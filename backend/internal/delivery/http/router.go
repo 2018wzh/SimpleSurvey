@@ -53,12 +53,19 @@ func NewRouter(cfg config.Config, handler *Handler, log *zap.Logger) *gin.Engine
 		questions := api.Group("/questions")
 		questions.Use(handler.AuthRequired(cfg.JWTSecret))
 		{
+			questions.GET("", handler.GetMyQuestions)
 			questions.POST("", handler.CreateQuestion)
 			questions.POST("/:id/versions", handler.CreateQuestionVersion)
 			questions.GET("/:id/versions", handler.GetQuestionVersions)
 			questions.POST("/:id/restore", handler.RestoreQuestionVersion)
 			questions.GET("/:id/usages", handler.GetQuestionUsages)
 			questions.GET("/:id/stats", handler.GetQuestionStats)
+		}
+
+		users := api.Group("/users")
+		users.Use(handler.AuthRequired(cfg.JWTSecret))
+		{
+			users.GET("", handler.ListAllUsers)
 		}
 
 		questionBanks := api.Group("/question-banks")

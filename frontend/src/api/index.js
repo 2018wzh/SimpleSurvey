@@ -67,6 +67,63 @@ export default {
   getQuestionnaireResponses(id, params) {
     return api.get(`/questionnaires/${id}/responses`, { params })
   },
+  createCrossTabReport(id, data) {
+    return api.post(`/questionnaires/${id}/reports/crosstab`, data)
+  },
+
+  // ========== Questions ==========
+  getMyQuestions(params) {
+    return api.get('/questions', { params })
+  },
+  createQuestion(data) {
+    return api.post('/questions', data)
+  },
+  createQuestionVersion(id, data) {
+    return api.post(`/questions/${id}/versions`, data)
+  },
+  getQuestionVersions(id) {
+    return api.get(`/questions/${id}/versions`)
+  },
+  restoreQuestionVersion(id, data) {
+    return api.post(`/questions/${id}/restore`, data)
+  },
+  getQuestionUsages(id, params) {
+    return api.get(`/questions/${id}/usages`, { params })
+  },
+  getQuestionStats(id, params) {
+    return api.get(`/questions/${id}/stats`, { params })
+  },
+
+  // ========== Users ==========
+  getUsers(params) {
+    return api.get('/users', { params })
+  },
+
+  // ========== Question Banks ==========
+  getQuestionBanks(params) {
+    return api.get('/question-banks', { params })
+  },
+  createQuestionBank(data) {
+    return api.post('/question-banks', data)
+  },
+  updateQuestionBank(id, data) {
+    return api.patch(`/question-banks/${id}`, data)
+  },
+  addQuestionBankItem(id, data) {
+    return api.post(`/question-banks/${id}/items`, data)
+  },
+  updateQuestionBankItem(id, questionId, data) {
+    return api.patch(`/question-banks/${id}/items/${questionId}`, data)
+  },
+  removeQuestionBankItem(id, questionId) {
+    return api.delete(`/question-banks/${id}/items/${questionId}`)
+  },
+  shareQuestionBank(id, data) {
+    return api.post(`/question-banks/${id}/shares`, data)
+  },
+  unshareQuestionBank(id, targetUserId) {
+    return api.delete(`/question-banks/${id}/shares/${targetUserId}`)
+  },
 
   // ========== Surveys (fill side) ==========
   getSurvey(id) {

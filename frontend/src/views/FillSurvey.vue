@@ -228,7 +228,7 @@ async function doSubmit() {
     if (q.type === 'NUMBER' && val !== null && val !== '' && val !== undefined) val = Number(val)
     if (val === '' || val === null || val === undefined) continue
     if (Array.isArray(val) && val.length === 0) continue
-    ansArr.push({ questionId: q.questionId, value: val })
+    ansArr.push({ questionId: q.questionId, questionVersionId: q.questionVersionId, value: val })
   }
 
   const payload = {

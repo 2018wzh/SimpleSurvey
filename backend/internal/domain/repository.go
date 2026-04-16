@@ -39,6 +39,7 @@ type QuestionRepository interface {
 	FindVersionByID(ctx context.Context, versionID string) (*QuestionVersion, error)
 	ListVersions(ctx context.Context, questionID string) ([]QuestionVersion, error)
 	CreateVersion(ctx context.Context, question *QuestionEntity, version *QuestionVersion) error
+	ListByOwner(ctx context.Context, ownerID string, filter QuestionListFilter) ([]QuestionEntity, int64, error)
 }
 
 type QuestionBankRepository interface {

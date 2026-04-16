@@ -136,6 +136,18 @@ func (s *QuestionService) CreateVersion(ctx context.Context, ownerID, questionID
 	return &CreateQuestionResult{ID: question.ID, Version: version.Version, VersionID: version.ID}, nil
 }
 
+func (s *QuestionService) ListMine(ctx context.Context, ownerID string, filter domain.QuestionListFilter) ([]domain.QuestionEntity, int64, *apperror.AppError) {
+	ownerID = strings.TrimSpace(ownerID)
+	if ownerID == "" {
+		return nil, 0, apperror.Unauthorized("未授权")
+	}
+	items, total, err := s.questions.ListByOwner(ctx, ownerID, filter)
+	if err != nil {
+		return nil, 0, apperror.Internal("查询题目列表失败")
+	}
+	return items, total, nil
+}
+
 func (s *QuestionService) ListVersions(ctx context.Context, ownerID, questionID string) ([]domain.QuestionVersion, *apperror.AppError) {
 	ownerID = strings.TrimSpace(ownerID)
 	questionID = strings.TrimSpace(questionID)

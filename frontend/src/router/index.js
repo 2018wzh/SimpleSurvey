@@ -6,7 +6,9 @@ const routes = [
   { path: '/', name: 'Home', component: () => import('../views/Home.vue'), meta: { auth: true } },
   { path: '/create', name: 'CreateSurvey', component: () => import('../views/CreateSurvey.vue'), meta: { auth: true } },
   { path: '/survey/:id', name: 'FillSurvey', component: () => import('../views/FillSurvey.vue') },
-  { path: '/stats/:id', name: 'Statistics', component: () => import('../views/Statistics.vue'), meta: { auth: true } }
+  { path: '/stats/:id', name: 'Statistics', component: () => import('../views/Statistics.vue'), meta: { auth: true } },
+  { path: '/questions', name: 'Questions', component: () => import('../views/Questions.vue'), meta: { auth: true } },
+  { path: '/question-banks', name: 'QuestionBanks', component: () => import('../views/QuestionBanks.vue'), meta: { auth: true } }
 ]
 
 const router = createRouter({

@@ -281,6 +281,27 @@ func (h *Handler) AdminListUsers(c *gin.Context) {
 	response.Success(c, gin.H{"items": items, "total": total, "page": page, "limit": limit})
 }
 
+func (h *Handler) ListAllUsers(c *gin.Context) {
+	items, _, appErr := h.admin.ListUsers(c.Request.Context(), domain.UserListFilter{
+		Page:   1,
+		Limit:  1000,
+		Status: string(domain.UserStatusActive),
+	})
+	if appErr != nil {
+		h.writeAppError(c, appErr)
+		return
+	}
+	currentUserID := getRequiredUserID(c)
+	out := make([]gin.H, 0, len(items))
+	for _, u := range items {
+		if u.ID == currentUserID {
+			continue
+		}
+		out = append(out, gin.H{"id": u.ID, "username": u.Username})
+	}
+	response.Success(c, gin.H{"items": out})
+}
+
 func (h *Handler) AdminUpdateUserRole(c *gin.Context) {
 	var req updateUserRoleRequest
 	if err := c.ShouldBindJSON(&req); err != nil {

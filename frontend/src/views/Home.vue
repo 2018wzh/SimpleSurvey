@@ -4,6 +4,8 @@
       <h1>我的问卷</h1>
       <div>
         <button @click="$router.push('/create')">创建问卷</button>
+        <button @click="$router.push('/questions')" style="margin-left: 10px">我的题目</button>
+        <button @click="$router.push('/question-banks')" style="margin-left: 10px">我的题库</button>
         <button class="secondary" @click="logout" style="margin-left: 10px">退出</button>
       </div>
     </div>
